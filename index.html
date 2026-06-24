@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Moonbeams // Cube Puzzle</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0c1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Moonbeams">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<script>if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js");</script>
+<style>
+  :root{
+    --night:#0a0c1a;
+    --night2:#141826;
+    --silver:#dfe6f2;
+    --silver-dim:#9aa6bd;
+    --silver-deep:#6b758c;
+    --gold:#e8c878;
+    --gold-bright:#ffe9a8;
+    --gold-deep:#9c7e3a;
+    --ink:#eef2fb;
+    --ink-dim:#8e9ab4;
+    --line:#2a3146;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    font-family:'Georgia','Times New Roman',serif;color:var(--ink);overflow:hidden;user-select:none;
+    height:100dvh;display:flex;flex-direction:column;
+    background:
+      radial-gradient(ellipse at 50% 12%, rgba(232,200,120,.10), transparent 45%),
+      radial-gradient(ellipse at 80% 85%, rgba(223,230,242,.07), transparent 45%),
+      linear-gradient(180deg,var(--night),var(--night2));
+  }
+  /* drifting stars (home + game ambience) */
+  .stars{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .st{position:absolute;background:#fff;border-radius:50%;opacity:.5;animation:tw 4s ease-in-out infinite}
+  @keyframes tw{0%,100%{opacity:.12}50%{opacity:.75}}
+
+  /* ---- HUD ---- */
+  #hud{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;
+    padding:12px 14px 6px;z-index:5}
+  .homeBtn{font-family:'Georgia',serif;background:rgba(223,230,242,.08);color:var(--silver);
+    border:1px solid rgba(223,230,242,.3);border-radius:10px;padding:8px 14px;font-size:14px;cursor:pointer;
+    display:flex;align-items:center;gap:6px}
+  .homeBtn:active{transform:scale(.96)}
+  .stats{display:flex;gap:8px}
+  .stat{background:rgba(232,200,120,.08);border:1px solid rgba(232,200,120,.3);border-radius:9px;
+    padding:5px 11px;font-size:12px;text-align:center;font-family:'Georgia',serif}
+  .stat b{color:var(--gold-bright);font-size:15px}
+  .stat span{display:block;font-size:8px;color:var(--ink-dim);letter-spacing:.15em;font-family:sans-serif}
+
+  /* ---- STAGE ---- */
+  #stage{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;z-index:2}
+  /* the moon hovering above the cube */
+  #moon{position:absolute;top:6%;right:8%;width:52px;height:52px;border-radius:50%;
+    background:radial-gradient(circle at 38% 35%,#f0f2f8,#c8cfd9 55%,#8a95a8);
+    box-shadow:0 0 28px 8px rgba(180,195,220,.35),0 0 60px 20px rgba(180,195,220,.10);
+    z-index:3;overflow:hidden;transition:background .6s ease,box-shadow .6s ease}
+  #moon::before{content:"";position:absolute;inset:0;border-radius:50%;
+    background:transparent;transition:background .6s ease,box-shadow .6s ease;z-index:1}
+  #moon::after{content:"";position:absolute;inset:0;border-radius:50%;z-index:2;
+    background:radial-gradient(circle at 65% 60%, rgba(100,115,140,.35) 6%, transparent 9%),
+               radial-gradient(circle at 40% 70%, rgba(100,115,140,.3) 5%, transparent 8%),
+               radial-gradient(circle at 55% 35%, rgba(100,115,140,.25) 4%, transparent 7%);
+    transition:background .6s ease}
+  #scene{position:relative;transform-style:preserve-3d;
+    transform:rotateX(58deg) rotateZ(-45deg);transition:transform .4s ease}
+  .tile{position:absolute;transform-style:preserve-3d;border-radius:4px;
+    background:linear-gradient(135deg,#1a2138,#11172a);
+    border:1px solid rgba(223,230,242,.16);box-shadow:0 0 0 1px rgba(0,0,0,.4) inset}
+  .tile.goal{border-color:var(--gold);background:linear-gradient(135deg,#2c2614,#1f1a0a);
+    box-shadow:0 0 14px rgba(232,200,120,.35) inset}
+  .tile.painted{background:linear-gradient(135deg,#3a4a6b,#243049);
+    border-color:var(--silver);box-shadow:0 0 12px rgba(223,230,242,.4) inset}
+  .tile.wall{visibility:hidden}
+  .tile.lit{background:linear-gradient(135deg,#33301a,#221f0d);border-color:var(--gold);
+    box-shadow:0 0 12px rgba(232,200,120,.4) inset}
+  .tile .glyph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:18px;transform:rotate(45deg);color:var(--gold-bright)}
+
+  #cube{position:absolute;transform-style:preserve-3d;transition:transform .16s ease}
+  .face{position:absolute;display:flex;align-items:center;justify-content:center;
+    font-size:20px;font-weight:bold;color:#15120a;
+    background:linear-gradient(135deg,#f4f7ff,var(--silver));
+    border:2px solid rgba(255,255,255,.55);box-shadow:0 0 18px rgba(223,230,242,.5)}
+  .face.charged{background:linear-gradient(135deg,var(--gold-bright),var(--gold));
+    border-color:rgba(255,233,168,.7);box-shadow:0 0 20px rgba(232,200,120,.6)}
+
+  /* ---- CONTROLS ---- */
+  #ctrl{flex:0 0 auto;padding:6px 16px calc(14px + env(safe-area-inset-bottom));z-index:5}
+  #msg{text-align:center;font-size:13px;color:var(--gold-bright);min-height:20px;margin-bottom:6px;
+    font-style:italic}
+  .pad{display:grid;grid-template-columns:repeat(3,80px);grid-template-rows:repeat(2,72px);
+    gap:8px;justify-content:center}
+  .pad button{font-family:'Georgia',serif;font-size:28px;border:none;border-radius:14px;cursor:pointer;
+    background:linear-gradient(180deg,#1b2238,#121a2e);color:var(--silver);
+    border:1px solid rgba(223,230,242,.32);box-shadow:0 4px 0 #0a1020;
+    touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  .pad button:active{transform:translateY(3px);box-shadow:0 1px 0 #0a1020}
+  .pad .up{grid-column:2;grid-row:1}.pad .left{grid-column:1;grid-row:2}
+  .pad .down{grid-column:2;grid-row:2}.pad .right{grid-column:3;grid-row:2}
+  .row{display:flex;gap:8px;justify-content:center;margin-top:8px}
+  .row button{font-family:sans-serif;font-size:12px;letter-spacing:.1em;border:none;border-radius:9px;
+    padding:9px 16px;cursor:pointer;background:rgba(232,200,120,.12);color:var(--gold);
+    border:1px solid rgba(232,200,120,.35);touch-action:manipulation}
+  .row button:active{transform:scale(.96)}
+
+  /* ---- SCREENS ---- */
+  .screen{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:flex-start;text-align:center;padding:30px 24px;overflow-y:auto;
+    background:linear-gradient(180deg,rgba(10,12,26,.96),rgba(20,24,38,.96))}
+  .bigmoon{width:90px;height:90px;border-radius:50%;margin:6px 0 14px;
+    background:radial-gradient(circle at 38% 35%,#f0f2f8,#c8cfd9 55%,#8a95a8);
+    box-shadow:0 0 50px 14px rgba(180,195,220,.35)}
+  .screen h1{font-size:clamp(30px,9vw,48px);color:var(--gold-bright);letter-spacing:.06em;line-height:1;
+    text-shadow:0 0 30px rgba(232,200,120,.45);font-weight:400}
+  .screen h1 small{display:block;color:var(--silver);font-size:12px;letter-spacing:.4em;margin-top:10px;
+    font-family:sans-serif}
+  .screen p{color:var(--ink-dim);font-size:14px;line-height:1.7;max-width:440px;margin:16px 0}
+
+  /* Andy quote card */
+  .quote{max-width:440px;margin:8px 0 20px;padding:16px 18px;border-radius:14px;
+    background:rgba(232,200,120,.07);border:1px solid rgba(232,200,120,.3);text-align:left}
+  .quote .q{font-style:italic;color:var(--silver);font-size:14px;line-height:1.6}
+  .quote .meta{margin-top:10px;font-family:sans-serif;font-size:11px;letter-spacing:.08em;color:var(--gold)}
+
+  .btn{font-family:'Georgia',serif;background:linear-gradient(135deg,var(--silver),var(--gold));color:#10131f;
+    font-weight:bold;border:none;border-radius:10px;padding:14px 32px;font-size:17px;cursor:pointer;
+    letter-spacing:.04em;box-shadow:0 6px 22px rgba(232,200,120,.32);margin:4px}
+  .btn:active{transform:translateY(2px)}
+  .btn.ghost{background:transparent;color:var(--silver);border:1px solid rgba(223,230,242,.4);box-shadow:none}
+
+  /* level picker */
+  .levels{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;max-width:440px;width:100%;margin:6px 0 20px}
+  .lvlCard{background:rgba(223,230,242,.05);border:1px solid rgba(223,230,242,.2);border-radius:14px;
+    padding:16px 14px;cursor:pointer;text-align:left;transition:transform .08s}
+  .lvlCard:active{transform:scale(.97)}
+  .lvlCard .n{font-family:sans-serif;font-size:10px;letter-spacing:.2em;color:var(--gold)}
+  .lvlCard .nm{font-size:17px;color:var(--silver);margin:4px 0 6px}
+  .lvlCard .pr{font-family:sans-serif;font-size:11px;color:var(--ink-dim)}
+  .lvlCard .done{color:var(--gold-bright)}
+
+  /* rules guide */
+  .rules{max-width:460px;text-align:left;margin:6px 0 18px}
+  .rule{display:flex;gap:12px;align-items:flex-start;margin:14px 0}
+  .rule .ic{flex:0 0 38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+    font-size:20px;background:rgba(232,200,120,.12);border:1px solid rgba(232,200,120,.3)}
+  .rule .tx{font-size:14px;line-height:1.55;color:var(--silver)}
+  .rule .tx b{color:var(--gold-bright)}
+  .miniface{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:middle;margin:0 2px}
+  .mf-silver{background:linear-gradient(135deg,#f4f7ff,#dfe6f2);border:1px solid #fff}
+  .mf-gold{background:linear-gradient(135deg,#ffe9a8,#e8c878);border:1px solid #ffe9a8}
+
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<div class="stars" id="stars"></div>
+
+<!-- ===== HOME ===== -->
+<div class="screen" id="home">
+  <div class="bigmoon"></div>
+  <h1>Moonbeams<small>A CUBE PUZZLE</small></h1>
+  <button class="btn" onclick="show('picker')">Choose a level ▸</button>
+  <button class="btn ghost" onclick="show('rulesScreen')">How to play</button>
+</div>
+
+<!-- ===== LEVEL PICKER ===== -->
+<div class="screen hide" id="picker">
+  <h1 style="font-size:32px">Levels<small>PICK YOUR MOON</small></h1>
+  <div class="levels" id="levelGrid"></div>
+  <button class="btn ghost" onclick="show('home')">← Home</button>
+</div>
+
+<!-- ===== RULES ===== -->
+<div class="screen hide" id="rulesScreen">
+  <h1 style="font-size:30px">How to Play<small>THE RULES</small></h1>
+  <div class="rules">
+    <div class="rule"><div class="ic">🎲</div><div class="tx">
+      Roll the <b>cube</b> across the grid with the arrows (or swipe / arrow keys). It tips one square at a time, and it remembers which face is down.</div></div>
+    <div class="rule"><div class="ic">🩶</div><div class="tx">
+      Every square the cube lands on gets <b>painted</b>. Your goal: paint <b>every floor square</b> on the grid.</div></div>
+    <div class="rule"><div class="ic">✦</div><div class="tx">
+      A glowing <b>moon-pad ✦</b> only locks when the cube's <span class="miniface mf-gold"></span> <b>gold face</b> is the one rolling down onto it. The other faces are <span class="miniface mf-silver"></span> silver.</div></div>
+    <div class="rule"><div class="ic">◎</div><div class="tx">
+      Finish standing on the <b>goal ◎</b> with the whole grid lit. That completes the level.</div></div>
+    <div class="rule"><div class="ic">↺</div><div class="tx">
+      Stuck? <b>Reset</b> the level anytime, or rotate the view to see the board from another angle. Beat the <b>par</b> for a clean solve.</div></div>
+  </div>
+  <button class="btn ghost" onclick="show(lastScreen)">← Back</button>
+</div>
+
+<!-- ===== GAME ===== -->
+<div id="game" class="hide" style="display:flex;flex-direction:column;flex:1;min-height:0">
+  <div id="hud">
+    <button class="homeBtn" onclick="goHome()">⌂ Home</button>
+    <div class="stats">
+      <div class="stat"><b id="lvlNum">1</b><span>LEVEL</span></div>
+      <div class="stat"><b id="moveNum">0</b><span>ROLLS</span></div>
+      <div class="stat"><b id="parNum">—</b><span>PAR</span></div>
+    </div>
+  </div>
+
+  <div id="stage">
+    <div id="moon"></div>
+    <div id="scene">
+      <div id="cube">
+        <div class="face" id="f-top"></div>
+        <div class="face" id="f-bottom"></div>
+        <div class="face" id="f-front"></div>
+        <div class="face" id="f-back"></div>
+        <div class="face" id="f-left"></div>
+        <div class="face" id="f-right"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="ctrl">
+    <div id="msg"></div>
+    <div class="pad">
+      <button class="up"    onclick="tryRoll(0,-1)">▲</button>
+      <button class="left"  onclick="tryRoll(-1,0)">◄</button>
+      <button class="down"  onclick="tryRoll(0,1)">▼</button>
+      <button class="right" onclick="tryRoll(1,0)">►</button>
+    </div>
+    <div class="row">
+      <button onclick="resetLevel()">↺ RESET</button>
+      <button onclick="rotateView()">⟳ ROTATE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== LEVEL CLEAR ===== -->
+<div class="screen hide" id="nodeClear">
+  <div class="bigmoon"></div>
+  <h1 id="ncTitle" style="font-size:34px">Level Clear</h1>
+  <p id="ncMsg"></p>
+  <button class="btn" id="ncNext">Next level →</button>
+  <button class="btn ghost" onclick="show('picker')">Level picker</button>
+</div>
+
+<!-- ===== ALL CLEAR ===== -->
+<div class="screen hide" id="allClear">
+  <div class="bigmoon"></div>
+  <h1>All Moons Lit<small>EVERY LEVEL CLEAR</small></h1>
+  <p>You rolled your way through every board. The moon over the cube glows full.<br><br>
+  Made for the one whose favourite puzzles roll. ❤️</p>
+  <button class="btn" onclick="show('home')">Home</button>
+</div>
+
+<script>
+/* stars */
+const starBox=document.getElementById('stars');
+for(let i=0;i<70;i++){const s=document.createElement('div');s.className='st';
+  const sz=Math.random()*2+1;s.style.width=s.style.height=sz+'px';
+  s.style.left=Math.random()*100+'vw';s.style.top=Math.random()*100+'vh';
+  s.style.animationDelay=Math.random()*4+'s';starBox.appendChild(s);}
+
+/* ===== screen routing ===== */
+let lastScreen='home';
+const SCREENS=['home','picker','rulesScreen','nodeClear','allClear'];
+function show(id){
+  if(id!=='rulesScreen')lastScreen=id;
+  SCREENS.forEach(s=>document.getElementById(s).classList.add('hide'));
+  document.getElementById('game').classList.add('hide');
+  document.getElementById(id).classList.remove('hide');
+  if(id==='picker')renderPicker();
+}
+
+/* ===================== LEVELS (verified solvable) ===================== */
+const LEVELS=[
+  {name:"Crescent", par:15, grid:["S...",".##.","....","..G."],
+   blurb:"Paint every floor square, then rest on the goal ◎.",
+   moon:{bg:"radial-gradient(circle at 38% 35%,#f0f2f8,#c8cfd9 55%,#8a95a8)",
+         shadow:"0 0 28px 8px rgba(180,195,220,.4),0 0 60px 20px rgba(180,195,220,.12)",
+         after:"radial-gradient(circle at 72% 50%, #0d1120 38%, transparent 41%)"}},
+  {name:"Gibbous", par:26, grid:[".....",".###.","S.#.G",".###.","....."],
+   blurb:"A loop of floor around a dark core. Roll the whole ring.",
+   moon:{bg:"radial-gradient(circle at 40% 38%,#ffffff,#dde4f0 50%,#a8b4c8)",
+         shadow:"0 0 30px 10px rgba(200,215,240,.45),0 0 65px 22px rgba(200,215,240,.14)",
+         after:"radial-gradient(circle at 78% 50%, #0d1120 18%, transparent 21%)"}},
+  {name:"Moonpads", par:27, grid:["S..*.",".##..","..#.*",".....","*..G."],
+   blurb:"Moon-pads (✦) lock only when the gold face rolls down onto them.",
+   moon:{bg:"radial-gradient(circle at 38% 35%,#e8eeff,#b0bfe8 55%,#6878b8)",
+         shadow:"0 0 28px 10px rgba(140,160,230,.45),0 0 60px 20px rgba(140,160,230,.15)",
+         after:"radial-gradient(circle at 65% 60%, rgba(60,80,160,.35) 6%, transparent 9%), radial-gradient(circle at 40% 70%, rgba(60,80,160,.3) 5%, transparent 8%)"}},
+  {name:"Full Moon", par:20, grid:["S...","....","*..*","....","..G."],
+   blurb:"Open floor, two moon-pads. Mind which face is down.",
+   moon:{bg:"radial-gradient(circle at 42% 38%,#ffffff,#eef1f8 60%,#c8d0df)",
+         shadow:"0 0 36px 14px rgba(220,230,255,.55),0 0 80px 30px rgba(220,230,255,.2)",
+         after:"radial-gradient(circle at 65% 60%, rgba(120,130,160,.2) 6%, transparent 9%), radial-gradient(circle at 40% 70%, rgba(120,130,160,.18) 5%, transparent 8%), radial-gradient(circle at 55% 35%, rgba(120,130,160,.15) 4%, transparent 7%)"}},
+  {name:"Waxing", par:18, grid:["S#.#.","..#..",".#.#.","..#..","#.#.G"],
+   blurb:"A winding path — no room to wander.",
+   moon:{bg:"radial-gradient(circle at 38% 50%,#f0f2f8,#c8cfd9 50%,#8a95a8)",
+         shadow:"0 0 24px 8px rgba(180,195,220,.35),0 0 50px 18px rgba(180,195,220,.10)",
+         after:"radial-gradient(circle at 75% 50%, #0d1120 48%, transparent 51%)"}},
+  {name:"Waning", par:24, grid:["#.#.#",".....",  "#.S.#",".....", "#.#G#"],
+   blurb:"Four open arms meet in the middle. Plan your crossing.",
+   moon:{bg:"radial-gradient(circle at 62% 50%,#f0f2f8,#c8cfd9 50%,#8a95a8)",
+         shadow:"0 0 24px 8px rgba(180,195,220,.35),0 0 50px 18px rgba(180,195,220,.10)",
+         after:"radial-gradient(circle at 25% 50%, #0d1120 48%, transparent 51%)"}},
+  {name:"New Moon", par:32, grid:["S....","#.##.","....#","##...","....*","..#.G"],
+   blurb:"Walls close in. The moon-pad waits at the far end.",
+   moon:{bg:"radial-gradient(circle at 42% 38%,#1e2336,#0d1020 70%,#080c18)",
+         shadow:"0 0 20px 6px rgba(80,95,140,.25),0 0 45px 14px rgba(80,95,140,.08)",
+         after:"radial-gradient(circle at 30% 28%, rgba(255,255,255,.06) 8%, transparent 12%)"}},
+  {name:"Harvest Moon", par:30, grid:["*..S.","####.",".....",".####",".*..G"],
+   blurb:"Two moon-pads — your gold face must land on both.",
+   moon:{bg:"radial-gradient(circle at 38% 35%,#fff4d0,#e8a840 55%,#b06820)",
+         shadow:"0 0 30px 10px rgba(230,160,60,.45),0 0 65px 22px rgba(230,160,60,.16)",
+         after:"radial-gradient(circle at 65% 60%, rgba(140,80,20,.4) 6%, transparent 9%), radial-gradient(circle at 40% 70%, rgba(140,80,20,.35) 5%, transparent 8%)"}},
+  {name:"The Spiral", par:38, grid:["S....","####.","*..#.","#.##.","#....","#..G."],
+   blurb:"Coil inward to the goal. Keep track of every face.",
+   moon:{bg:"radial-gradient(circle at 38% 35%,#f0f2f8,#c8cfd9 55%,#8a95a8)",
+         shadow:"0 0 28px 8px rgba(180,195,220,.35),0 0 60px 20px rgba(180,195,220,.10)",
+         after:"radial-gradient(circle at 65% 60%, rgba(100,115,140,.35) 6%, transparent 9%), radial-gradient(circle at 40% 70%, rgba(100,115,140,.3) 5%, transparent 8%), radial-gradient(circle at 55% 35%, rgba(100,115,140,.25) 4%, transparent 7%)"}},
+  {name:"Blood Moon", par:45, grid:["S.*..",".#.#*","*....","..#..","..*#.","....G"],
+   blurb:"Six moon-pads scattered like stars. Gold face counts every time.",
+   moon:{bg:"radial-gradient(circle at 38% 35%,#ff8870,#c82020 55%,#6e0808)",
+         shadow:"0 0 32px 12px rgba(200,40,20,.5),0 0 70px 25px rgba(200,40,20,.18)",
+         after:"radial-gradient(circle at 65% 60%, rgba(100,20,10,.5) 6%, transparent 9%), radial-gradient(circle at 40% 70%, rgba(100,20,10,.45) 5%, transparent 8%), radial-gradient(circle at 55% 35%, rgba(100,20,10,.4) 4%, transparent 7%)"}},
+];
+const cleared=LEVELS.map(()=>false);
+const bestRolls=LEVELS.map(()=>null);
+
+const TILE=58, GAP=6;
+const scene=document.getElementById('scene');
+const cubeEl=document.getElementById('cube');
+const msg=document.getElementById('msg');
+const lvlNum=document.getElementById('lvlNum');
+const moveNum=document.getElementById('moveNum');
+const parNum=document.getElementById('parNum');
+
+let li=0, grid, rows, cols, start, goal;
+let cube, chargedFace, painted, charge, moves=0, viewRot=0, busy=false, rollTransform='';
+
+function renderPicker(){
+  const g=document.getElementById('levelGrid');g.innerHTML='';
+  LEVELS.forEach((L,i)=>{
+    const c=document.createElement('div');c.className='lvlCard';
+    const best=bestRolls[i]!=null?`best ${bestRolls[i]}`:'';
+    c.innerHTML=`<div class="n">LEVEL ${i+1}${cleared[i]?' ✦':''}</div>
+      <div class="nm">${L.name}</div>
+      <div class="pr">par ${L.par} ${best?'· <span class="done">'+best+'</span>':''}</div>`;
+    c.onclick=()=>{li=i;startLevel();};
+    g.appendChild(c);
+  });
+}
+
+function startLevel(){
+  show('home'); // clear overlays
+  SCREENS.forEach(s=>document.getElementById(s).classList.add('hide'));
+  document.getElementById('game').classList.remove('hide');
+  buildLevel();
+}
+
+function buildLevel(){
+  const L=LEVELS[li];
+  grid=L.grid.map(r=>r.split(''));
+  rows=grid.length; cols=grid[0].length;
+  painted=new Set(); charge=new Set();
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    const c=grid[y][x];
+    if(c==='S'){start={x,y};grid[y][x]='.';}
+    if(c==='G'){goal={x,y};}
+    if(c==='*'){charge.add(x+','+y);}
+  }
+  cube={x:start.x,y:start.y};chargedFace='top';moves=0;
+  lvlNum.textContent=li+1;parNum.textContent=L.par;moveNum.textContent=0;
+  msg.textContent=L.blurb;
+  updateMoon(L.moon);
+  layoutScene();paintCurrent();renderState();
+}
+
+function updateMoon(m){
+  const moon=document.getElementById('moon');
+  moon.style.background=m.bg;
+  moon.style.boxShadow=m.shadow;
+  // Use a dynamic stylesheet rule for ::after since we can't set pseudo-element styles directly
+  let styleTag=document.getElementById('moonStyle');
+  if(!styleTag){styleTag=document.createElement('style');styleTag.id='moonStyle';document.head.appendChild(styleTag);}
+  styleTag.textContent=`#moon::after{background:${m.after}}`;
+}
+
+function layoutScene(){
+  const stage=document.getElementById('stage');
+  const ctrl=document.getElementById('ctrl');
+  const hud=document.getElementById('hud');
+  // Reserve space for hud + controls so the pad is never squished
+  const ctrlH=ctrl.getBoundingClientRect().height||210;
+  const hudH=hud.getBoundingClientRect().height||56;
+  const stageH=window.innerHeight-hudH-ctrlH;
+  const maxW=stage.clientWidth*0.88, maxH=Math.max(stageH*0.94,80);
+  const scale=Math.min(maxW/(cols*(TILE+GAP)), maxH/(rows*(TILE+GAP)), 1.4);
+  scene.style.width=(cols*(TILE+GAP))+'px';
+  scene.style.height=(rows*(TILE+GAP))+'px';
+  scene.dataset.scale=scale;applyView();
+  scene.querySelectorAll('.tile').forEach(t=>t.remove());
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    const c=grid[y][x];const t=document.createElement('div');t.className='tile';
+    t.dataset.k=x+','+y;t.style.width=TILE+'px';t.style.height=TILE+'px';
+    t.style.left=(x*(TILE+GAP))+'px';t.style.top=(y*(TILE+GAP))+'px';
+    if(c==='#')t.classList.add('wall');
+    if(charge.has(x+','+y)){t.classList.add('lit');t.innerHTML='<div class="glyph">✦</div>';}
+    if(goal.x===x&&goal.y===y){t.classList.add('goal');if(!t.innerHTML)t.innerHTML='<div class="glyph">◎</div>';}
+    scene.insertBefore(t,cubeEl);
+  }
+  sizeCube();
+}
+function sizeCube(){
+  const s=TILE;cubeEl.style.width=s+'px';cubeEl.style.height=s+'px';
+  const F={'f-top':`translateZ(${s/2}px)`,'f-bottom':`rotateX(180deg) translateZ(${s/2}px)`,
+    'f-front':`rotateX(90deg) translateZ(${s/2}px)`,'f-back':`rotateX(-90deg) translateZ(${s/2}px)`,
+    'f-left':`rotateY(-90deg) translateZ(${s/2}px)`,'f-right':`rotateY(90deg) translateZ(${s/2}px)`};
+  for(const id in F){const f=document.getElementById(id);f.style.width=s+'px';f.style.height=s+'px';f.style.transform=F[id];}
+}
+function applyView(){const scale=parseFloat(scene.dataset.scale||1);
+  scene.style.transform=`scale(${scale}) rotateX(58deg) rotateZ(${-45+viewRot}deg)`;}
+function rotateView(){viewRot=(viewRot+90)%360;applyView();renderCube();}
+
+function paintCurrent(){
+  const k=cube.x+','+cube.y;
+  if(charge.has(k)){if(chargedFace==='bottom')painted.add(k);}
+  else painted.add(k);
+}
+function renderState(){
+  scene.querySelectorAll('.tile').forEach(t=>{const k=t.dataset.k;
+    t.classList.toggle('painted', painted.has(k) && !t.classList.contains('goal'));});
+  for(const id of ['f-top','f-bottom','f-front','f-back','f-left','f-right'])
+    document.getElementById(id).classList.remove('charged');
+  const map={top:'f-top',bottom:'f-bottom',north:'f-back',south:'f-front',east:'f-right',west:'f-left'};
+  document.getElementById(map[chargedFace]).classList.add('charged');
+  renderCube();
+}
+function renderCube(){const s=TILE,g=GAP;const px=cube.x*(s+g),py=cube.y*(s+g);
+  cubeEl.style.transform=`translate3d(${px}px,${py}px,${s/2}px) ${rollTransform}`;}
+
+function rollFaces(dir){
+  const T={
+    up:{top:'south',south:'bottom',bottom:'north',north:'top',east:'east',west:'west'},
+    down:{top:'north',north:'bottom',bottom:'south',south:'top',east:'east',west:'west'},
+    left:{top:'east',east:'bottom',bottom:'west',west:'top',north:'north',south:'south'},
+    right:{top:'west',west:'bottom',bottom:'east',east:'top',north:'north',south:'south'}}[dir];
+  chargedFace=T[chargedFace];
+}
+function tryRoll(dx,dy){
+  if(busy)return;
+  const nx=cube.x+dx,ny=cube.y+dy;
+  if(nx<0||ny<0||nx>=cols||ny>=rows){flash("the edge of the grid");return;}
+  if(grid[ny][nx]==='#'){flash("a wall — can't roll there");return;}
+  busy=true;
+  const dir=dy<0?'up':dy>0?'down':dx<0?'left':'right';
+  const axis=(dir==='up'||dir==='down')?'X':'Y';
+  const deg=axis==='X'?(dir==='down'?90:-90):(dir==='right'?-90:90);
+  rollTransform=`rotate${axis}(${deg}deg)`;renderCube();
+  setTimeout(()=>{
+    cube.x=nx;cube.y=ny;rollFaces(dir);rollTransform='';
+    moves++;moveNum.textContent=moves;paintCurrent();renderState();
+    busy=false;checkWin();
+  },170);
+}
+function flash(t){msg.textContent=t;clearTimeout(flash._t);
+  flash._t=setTimeout(()=>{msg.textContent=LEVELS[li].blurb;},1400);}
+function needTiles(){let n=[];for(let y=0;y<rows;y++)for(let x=0;x<cols;x++)if(grid[y][x]!=='#')n.push(x+','+y);return n;}
+
+function checkWin(){
+  const need=needTiles();
+  const allPainted=need.every(k=>painted.has(k));
+  const onGoal=(cube.x===goal.x&&cube.y===goal.y);
+  if(allPainted&&onGoal){
+    busy=true;const L=LEVELS[li];
+    cleared[li]=true;
+    if(bestRolls[li]==null||moves<bestRolls[li])bestRolls[li]=moves;
+    setTimeout(()=>{
+      document.getElementById('game').classList.add('hide');
+      if(li>=LEVELS.length-1 && cleared.every(Boolean)){
+        document.getElementById('allClear').classList.remove('hide');
+      }else{
+        const rating= moves<=L.par?"A clean roll, under par. ✦":
+                      moves<=L.par+3?"Lovely. A few extra rolls.":
+                      "Solved — the scenic route counts too. 🌙";
+        document.getElementById('ncMsg').textContent=
+          `${L.name} lit in ${moves} rolls (par ${L.par}). ${rating}`;
+        const nb=document.getElementById('ncNext');
+        if(li>=LEVELS.length-1){nb.textContent='Back to picker';nb.onclick=()=>show('picker');}
+        else{nb.textContent='Next level →';nb.onclick=()=>{li++;startLevel();};}
+        document.getElementById('nodeClear').classList.remove('hide');
+      }
+    },320);
+  }else if(allPainted&&!onGoal){flash("grid lit — now reach the goal ◎");}
+}
+function resetLevel(){if(busy)return;buildLevel();}
+function goHome(){busy=false;show('home');}
+
+/* keyboard + swipe */
+addEventListener('keydown',e=>{
+  if(document.getElementById('game').classList.contains('hide'))return;
+  const m={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],
+           w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]};
+  if(m[e.key]){e.preventDefault();tryRoll(...m[e.key]);}
+  if(e.key==='r')resetLevel();
+});
+let tsx,tsy;
+const stageEl=document.getElementById('stage');
+stageEl.addEventListener('touchstart',e=>{const t=e.touches[0];tsx=t.clientX;tsy=t.clientY;},{passive:true});
+stageEl.addEventListener('touchend',e=>{
+  if(tsx==null)return;const t=e.changedTouches[0];
+  const dx=t.clientX-tsx,dy=t.clientY-tsy;
+  if(Math.abs(dx)<24&&Math.abs(dy)<24)return;
+  if(Math.abs(dx)>Math.abs(dy))tryRoll(dx>0?1:-1,0);else tryRoll(0,dy>0?1:-1);
+  tsx=tsy=null;
+},{passive:true});
+
+addEventListener('resize',()=>{if(!document.getElementById('game').classList.contains('hide')){layoutScene();renderState();}});
+
+/* start on home */
+show('home');
+</script>
+</body>
+</html>
