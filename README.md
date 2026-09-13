@@ -19,6 +19,9 @@ Host on GitHub Pages, then visit the URL on your phone and tap **"Add to Home Sc
 - **Swipe** on touch devices
 - **R** to reset
 - Paint every tile, then land on ◎ to win
+- Moon-pads ✦ only lock when the cube's gold face rolls down onto them
+- Ice tiles ❆ keep the cube sliding until it hits a wall, an edge, or plain floor
+- 16 levels in all, from a two-move joke level to a six-mechanic finale
 - Works fully offline once installed!
 
 ## Files
@@ -26,4 +29,5 @@ Host on GitHub Pages, then visit the URL on your phone and tap **"Add to Home Sc
 - `index.html` — the game
 - `manifest.json` — PWA metadata
 - `sw.js` — service worker (offline support)
-- `icons/` — home screen icons
+- `icon-192.png`, `icon-512.png` — home screen icons
+- `icon-192-maskable.png`, `icon-512-maskable.png` — safe-zone padded icons for Android's adaptive icon masks

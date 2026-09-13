@@ -2,14 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Moonbeams // Cube Puzzle</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0a0c1a">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Moonbeams">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="format-detection" content="telephone=no">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js");</script>
 <style>
   :root{
@@ -25,11 +28,13 @@
     --ink-dim:#8e9ab4;
     --line:#2a3146;
   }
-  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%}
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;-webkit-touch-callout:none;-webkit-user-select:none}
+  html,body{height:100%;overscroll-behavior:none}
   body{
     font-family:'Georgia','Times New Roman',serif;color:var(--ink);overflow:hidden;user-select:none;
-    height:100dvh;display:flex;flex-direction:column;
+    height:100vh;height:100dvh;display:flex;flex-direction:column;
+    position:fixed;inset:0;width:100%;
     background:
       radial-gradient(ellipse at 50% 12%, rgba(232,200,120,.10), transparent 45%),
       radial-gradient(ellipse at 80% 85%, rgba(223,230,242,.07), transparent 45%),
@@ -54,7 +59,8 @@
   .stat span{display:block;font-size:8px;color:var(--ink-dim);letter-spacing:.15em;font-family:sans-serif}
 
   /* ---- STAGE ---- */
-  #stage{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;z-index:2}
+  #stage{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;z-index:2;
+    touch-action:none;overscroll-behavior:none}
   /* the moon hovering above the cube */
   #moon{position:absolute;top:6%;right:8%;width:52px;height:52px;border-radius:50%;
     background:radial-gradient(circle at 38% 35%,#f0f2f8,#c8cfd9 55%,#8a95a8);
@@ -67,6 +73,17 @@
                radial-gradient(circle at 40% 70%, rgba(100,115,140,.3) 5%, transparent 8%),
                radial-gradient(circle at 55% 35%, rgba(100,115,140,.25) 4%, transparent 7%);
     transition:background .6s ease}
+  #moon{animation:moonpulse 5s ease-in-out infinite}
+  @keyframes moonpulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.08)}}
+
+  /* sparkle burst for moon-pad lock + confetti for level clear */
+  .sparkle{position:absolute;border-radius:50%;pointer-events:none;z-index:6;
+    background:radial-gradient(circle,#fff,var(--gold-bright) 55%,transparent 72%)}
+  @keyframes sparkleFly{0%{opacity:1;transform:translate(0,0) scale(1)}
+    100%{opacity:0;transform:var(--fly) scale(.2)}}
+  .confetti{position:fixed;top:-10px;border-radius:2px;pointer-events:none;z-index:30}
+  @keyframes confettiFall{0%{transform:translateY(0) rotate(0deg);opacity:1}
+    100%{transform:translateY(110vh) rotate(600deg);opacity:.85}}
   #scene{position:relative;transform-style:preserve-3d;
     transform:rotateX(58deg) rotateZ(-45deg);transition:transform .4s ease}
   .tile{position:absolute;transform-style:preserve-3d;border-radius:4px;
@@ -76,19 +93,36 @@
     box-shadow:0 0 14px rgba(232,200,120,.35) inset}
   .tile.painted{background:linear-gradient(135deg,#3a4a6b,#243049);
     border-color:var(--silver);box-shadow:0 0 12px rgba(223,230,242,.4) inset}
-  .tile.wall{visibility:hidden}
+  .tile.wall{background:radial-gradient(circle at 50% 40%,#05060d,#000 70%);
+    border:1px solid rgba(0,0,0,.6);box-shadow:0 0 16px rgba(0,0,0,.7) inset,0 2px 4px rgba(0,0,0,.5);
+    transform:translateZ(-10px)}
+  .tile.ice{background:linear-gradient(135deg,#dff3ff,#a9d6ec 55%,#7fb8d8);
+    border-color:rgba(223,242,255,.7);box-shadow:0 0 14px rgba(180,225,250,.55) inset;
+    animation:shimmer 2.6s ease-in-out infinite}
+  @keyframes shimmer{0%,100%{filter:brightness(1)}50%{filter:brightness(1.18)}}
   .tile.lit{background:linear-gradient(135deg,#33301a,#221f0d);border-color:var(--gold);
     box-shadow:0 0 12px rgba(232,200,120,.4) inset}
   .tile .glyph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     font-size:18px;transform:rotate(45deg);color:var(--gold-bright)}
+  .tile .glyph.ice-glyph{color:#e8f7ff;font-size:15px;text-shadow:0 0 6px rgba(190,230,255,.8)}
+  #cubeShadow{position:absolute;border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle,rgba(0,0,0,.5),transparent 72%);
+    transition:transform .16s ease,opacity .16s ease}
 
   #cube{position:absolute;transform-style:preserve-3d;transition:transform .16s ease}
+  #cube.bump{animation:bump .16s ease}
+  @keyframes bump{0%{transform:scale(1)}40%{transform:scale(.9,.9)}100%{transform:scale(1)}}
   .face{position:absolute;display:flex;align-items:center;justify-content:center;
     font-size:20px;font-weight:bold;color:#15120a;
     background:linear-gradient(135deg,#f4f7ff,var(--silver));
     border:2px solid rgba(255,255,255,.55);box-shadow:0 0 18px rgba(223,230,242,.5)}
+  .face::before{content:"";position:absolute;inset:15%;border-radius:6px;
+    border:1px solid rgba(21,18,10,.14);pointer-events:none}
+  .face::after{content:"";position:absolute;top:8%;left:10%;width:34%;height:20%;border-radius:50%;
+    background:linear-gradient(135deg,rgba(255,255,255,.65),transparent);pointer-events:none}
   .face.charged{background:linear-gradient(135deg,var(--gold-bright),var(--gold));
     border-color:rgba(255,233,168,.7);box-shadow:0 0 20px rgba(232,200,120,.6)}
+  .face.charged::before{border-color:rgba(80,60,10,.22)}
 
   /* ---- CONTROLS ---- */
   #ctrl{flex:0 0 auto;padding:6px 16px calc(14px + env(safe-area-inset-bottom));z-index:5}
@@ -188,6 +222,8 @@
       A glowing <b>moon-pad ✦</b> only locks when the cube's <span class="miniface mf-gold"></span> <b>gold face</b> is the one rolling down onto it. The other faces are <span class="miniface mf-silver"></span> silver.</div></div>
     <div class="rule"><div class="ic">◎</div><div class="tx">
       Finish standing on the <b>goal ◎</b> with the whole grid lit. That completes the level.</div></div>
+    <div class="rule"><div class="ic">❄</div><div class="tx">
+      <b>Ice tiles</b> are slick — the cube keeps rolling once it touches one, until it hits a wall, an edge, or plain floor again.</div></div>
     <div class="rule"><div class="ic">↺</div><div class="tx">
       Stuck? <b>Reset</b> the level anytime, or rotate the view to see the board from another angle. Beat the <b>par</b> for a clean solve.</div></div>
   </div>
@@ -208,6 +244,7 @@
   <div id="stage">
     <div id="moon"></div>
     <div id="scene">
+      <div id="cubeShadow"></div>
       <div id="cube">
         <div class="face" id="f-top"></div>
         <div class="face" id="f-bottom"></div>
@@ -271,18 +308,28 @@ function show(id){
   if(id==='picker')renderPicker();
 }
 
-/* ===================== LEVELS (verified solvable) ===================== */
+/* ===================== LEVELS (every board's solve verified by an offline BFS solver) ===================== */
 const LEVELS=[
   {name:"Crescent", par:15, grid:["S...",".##.","....","..G."],
    blurb:"Paint every floor square, then rest on the goal ◎.",
    moon:{bg:"radial-gradient(circle at 38% 35%,#f0f2f8,#c8cfd9 55%,#8a95a8)",
          shadow:"0 0 28px 8px rgba(180,195,220,.4),0 0 60px 20px rgba(180,195,220,.12)",
          after:"radial-gradient(circle at 72% 50%, #0d1120 38%, transparent 41%)"}},
+  {name:"Micromoon", par:8, grid:["S..",".~.","..G"],
+   blurb:"A tiny far-off moon. Barely a puzzle — enjoy the breather.",
+   moon:{bg:"radial-gradient(circle at 45% 40%,#eef0f6 0 16%,#c3ccdc 22% 44%,#6b7488 46%)",
+         shadow:"0 0 16px 4px rgba(160,175,205,.3),0 0 32px 10px rgba(160,175,205,.1)",
+         after:"radial-gradient(circle at 60% 55%, rgba(90,100,125,.3) 5%, transparent 8%)"}},
   {name:"Gibbous", par:26, grid:[".....",".###.","S.#.G",".###.","....."],
    blurb:"A loop of floor around a dark core. Roll the whole ring.",
    moon:{bg:"radial-gradient(circle at 40% 38%,#ffffff,#dde4f0 50%,#a8b4c8)",
          shadow:"0 0 30px 10px rgba(200,215,240,.45),0 0 65px 22px rgba(200,215,240,.14)",
          after:"radial-gradient(circle at 78% 50%, #0d1120 18%, transparent 21%)"}},
+  {name:"Wolf Moon", par:16, grid:["S~~.","..#.","..#.","..~G"],
+   blurb:"Ice tiles ❆ are slick — you'll keep sliding until something stops you.",
+   moon:{bg:"radial-gradient(circle at 40% 35%,#eef4ff,#b7c6dd 55%,#5b6b8c)",
+         shadow:"0 0 30px 10px rgba(150,175,220,.5),0 0 65px 20px rgba(150,175,220,.15)",
+         after:"radial-gradient(circle at 68% 55%, rgba(40,55,85,.4) 6%, transparent 9%), radial-gradient(circle at 35% 65%, rgba(40,55,85,.35) 5%, transparent 8%)"}},
   {name:"Moonpads", par:27, grid:["S..*.",".##..","..#.*",".....","*..G."],
    blurb:"Moon-pads (✦) lock only when the gold face rolls down onto them.",
    moon:{bg:"radial-gradient(circle at 38% 35%,#e8eeff,#b0bfe8 55%,#6878b8)",
@@ -293,11 +340,16 @@ const LEVELS=[
    moon:{bg:"radial-gradient(circle at 42% 38%,#ffffff,#eef1f8 60%,#c8d0df)",
          shadow:"0 0 36px 14px rgba(220,230,255,.55),0 0 80px 30px rgba(220,230,255,.2)",
          after:"radial-gradient(circle at 65% 60%, rgba(120,130,160,.2) 6%, transparent 9%), radial-gradient(circle at 40% 70%, rgba(120,130,160,.18) 5%, transparent 8%), radial-gradient(circle at 55% 35%, rgba(120,130,160,.15) 4%, transparent 7%)"}},
-  {name:"Waxing", par:18, grid:["S#.#.","..#..",".#.#.","..#..","#.#.G"],
+  {name:"Waxing", par:22, grid:["S#.#.",".....",".#.#.",".....","#.#.G"],
    blurb:"A winding path — no room to wander.",
    moon:{bg:"radial-gradient(circle at 38% 50%,#f0f2f8,#c8cfd9 50%,#8a95a8)",
          shadow:"0 0 24px 8px rgba(180,195,220,.35),0 0 50px 18px rgba(180,195,220,.10)",
          after:"radial-gradient(circle at 75% 50%, #0d1120 48%, transparent 51%)"}},
+  {name:"Snow Moon", par:24, grid:["S~~..",".##~.","..~..","*.##.","..~.G"],
+   blurb:"Ice threads through the walls. Plan the slide before you commit.",
+   moon:{bg:"radial-gradient(circle at 40% 35%,#ffffff,#e3f3ff 55%,#a9d4ec)",
+         shadow:"0 0 34px 12px rgba(190,230,255,.55),0 0 75px 26px rgba(190,230,255,.2)",
+         after:"radial-gradient(circle at 66% 58%, rgba(80,130,170,.3) 6%, transparent 9%), radial-gradient(circle at 38% 68%, rgba(80,130,170,.25) 5%, transparent 8%)"}},
   {name:"Waning", par:24, grid:["#.#.#",".....",  "#.S.#",".....", "#.#G#"],
    blurb:"Four open arms meet in the middle. Plan your crossing.",
    moon:{bg:"radial-gradient(circle at 62% 50%,#f0f2f8,#c8cfd9 50%,#8a95a8)",
@@ -308,21 +360,36 @@ const LEVELS=[
    moon:{bg:"radial-gradient(circle at 42% 38%,#1e2336,#0d1020 70%,#080c18)",
          shadow:"0 0 20px 6px rgba(80,95,140,.25),0 0 45px 14px rgba(80,95,140,.08)",
          after:"radial-gradient(circle at 30% 28%, rgba(255,255,255,.06) 8%, transparent 12%)"}},
-  {name:"Harvest Moon", par:30, grid:["*..S.","####.",".....",".####",".*..G"],
+  {name:"Harvest Moon", par:39, grid:["*..S.","####.",".....","#..##",".*..G"],
    blurb:"Two moon-pads — your gold face must land on both.",
    moon:{bg:"radial-gradient(circle at 38% 35%,#fff4d0,#e8a840 55%,#b06820)",
          shadow:"0 0 30px 10px rgba(230,160,60,.45),0 0 65px 22px rgba(230,160,60,.16)",
          after:"radial-gradient(circle at 65% 60%, rgba(140,80,20,.4) 6%, transparent 9%), radial-gradient(circle at 40% 70%, rgba(140,80,20,.35) 5%, transparent 8%)"}},
-  {name:"The Spiral", par:38, grid:["S....","####.","*..#.","#.##.","#....","#..G."],
+  {name:"Supermoon", par:29, grid:["S...~",".##..","*.~.#","#..~.",".#..*","~...G"],
+   blurb:"A big bright board. Two moon-pads and a run of ice to respect.",
+   moon:{bg:"radial-gradient(circle at 42% 38%,#fffef2,#f3e7b8 55%,#d8b866)",
+         shadow:"0 0 50px 20px rgba(255,240,190,.6),0 0 100px 40px rgba(255,240,190,.25)",
+         after:"radial-gradient(circle at 65% 62%, rgba(150,120,50,.25) 6%, transparent 9%), radial-gradient(circle at 38% 70%, rgba(150,120,50,.2) 5%, transparent 8%)"}},
+  {name:"The Spiral", par:26, grid:["S....","####.","*..#.","#.##.","#....","#..G."],
    blurb:"Coil inward to the goal. Keep track of every face.",
    moon:{bg:"radial-gradient(circle at 38% 35%,#f0f2f8,#c8cfd9 55%,#8a95a8)",
          shadow:"0 0 28px 8px rgba(180,195,220,.35),0 0 60px 20px rgba(180,195,220,.10)",
          after:"radial-gradient(circle at 65% 60%, rgba(100,115,140,.35) 6%, transparent 9%), radial-gradient(circle at 40% 70%, rgba(100,115,140,.3) 5%, transparent 8%), radial-gradient(circle at 55% 35%, rgba(100,115,140,.25) 4%, transparent 7%)"}},
-  {name:"Blood Moon", par:45, grid:["S.*..",".#.#*","*....","..#..","..*#.","....G"],
+  {name:"Blue Moon", par:40, grid:["S.#~..",".*#..#","..#.#.","#.....","..#*#.","~.#..G"],
+   blurb:"Rare and tangled. Every mechanic in the book shows up at once.",
+   moon:{bg:"radial-gradient(circle at 40% 35%,#eaf1ff,#9fb7e8 55%,#5570b0)",
+         shadow:"0 0 34px 12px rgba(120,150,230,.5),0 0 75px 26px rgba(120,150,230,.18)",
+         after:"radial-gradient(circle at 64% 58%, rgba(30,45,110,.35) 6%, transparent 9%), radial-gradient(circle at 36% 68%, rgba(30,45,110,.3) 5%, transparent 8%)"}},
+  {name:"Blood Moon", par:33, grid:["S.*..",".#.#*","*....","..#..","..*#.","....G"],
    blurb:"Six moon-pads scattered like stars. Gold face counts every time.",
    moon:{bg:"radial-gradient(circle at 38% 35%,#ff8870,#c82020 55%,#6e0808)",
          shadow:"0 0 32px 12px rgba(200,40,20,.5),0 0 70px 25px rgba(200,40,20,.18)",
          after:"radial-gradient(circle at 65% 60%, rgba(100,20,10,.5) 6%, transparent 9%), radial-gradient(circle at 40% 70%, rgba(100,20,10,.45) 5%, transparent 8%), radial-gradient(circle at 55% 35%, rgba(100,20,10,.4) 4%, transparent 7%)"}},
+  {name:"Eclipse", par:44, grid:["S~..#.","#.#.#.","..#*..","*#....","..#.#~","#~..*G"],
+   blurb:"The final board. Ice, walls and moon-pads, all coiled together.",
+   moon:{bg:"radial-gradient(circle at 55% 45%,#5a1010,#2a0808 55%,#0d0202)",
+         shadow:"0 0 26px 8px rgba(120,20,10,.4),0 0 55px 18px rgba(120,20,10,.15)",
+         after:"radial-gradient(circle at 30% 30%, rgba(0,0,0,.65) 44%, transparent 47%)"}},
 ];
 const cleared=LEVELS.map(()=>false);
 const bestRolls=LEVELS.map(()=>null);
@@ -405,10 +472,13 @@ function layoutScene(){
     t.dataset.k=x+','+y;t.style.width=TILE+'px';t.style.height=TILE+'px';
     t.style.left=(x*(TILE+GAP))+'px';t.style.top=(y*(TILE+GAP))+'px';
     if(c==='#')t.classList.add('wall');
+    if(c==='~')t.classList.add('ice');
     if(charge.has(x+','+y)){t.classList.add('lit');t.innerHTML='<div class="glyph">✦</div>';}
     if(goal.x===x&&goal.y===y){t.classList.add('goal');if(!t.innerHTML)t.innerHTML='<div class="glyph">◎</div>';}
+    if(c==='~'&&!t.innerHTML)t.innerHTML='<div class="glyph ice-glyph">❆</div>';
     scene.insertBefore(t,cubeEl);
   }
+  scene.insertBefore(document.getElementById('cubeShadow'),cubeEl);
   sizeCube();
 }
 function sizeCube(){
@@ -437,7 +507,40 @@ function renderState(){
   renderCube();
 }
 function renderCube(){const s=TILE,g=GAP;const px=cube.x*(s+g),py=cube.y*(s+g);
-  cubeEl.style.transform=`translate3d(${px}px,${py}px,${s/2}px) ${rollTransform}`;}
+  cubeEl.style.transform=`translate3d(${px}px,${py}px,${s/2}px) ${rollTransform}`;
+  const sh=document.getElementById('cubeShadow');
+  sh.style.width=(s*.8)+'px';sh.style.height=(s*.48)+'px';
+  sh.style.left=(px+s*.1)+'px';sh.style.top=(py+s*.6)+'px';
+}
+
+function buzz(ms){try{if(navigator.vibrate)navigator.vibrate(ms);}catch(e){}}
+function bumpCube(){cubeEl.classList.remove('bump');void cubeEl.offsetWidth;cubeEl.classList.add('bump');}
+
+function spawnSparkle(){
+  const rect=cubeEl.getBoundingClientRect();
+  const ox=rect.left+rect.width/2, oy=rect.top+rect.height/2;
+  for(let i=0;i<10;i++){
+    const s=document.createElement('div');s.className='sparkle';
+    const sz=Math.random()*5+3;
+    const ang=Math.random()*Math.PI*2, dist=26+Math.random()*36;
+    s.style.cssText=`position:fixed;left:${ox-sz/2}px;top:${oy-sz/2}px;width:${sz}px;height:${sz}px;`+
+      `--fly:translate(${Math.cos(ang)*dist}px,${Math.sin(ang)*dist}px);animation:sparkleFly .6s ease-out forwards`;
+    document.body.appendChild(s);
+    setTimeout(()=>s.remove(),650);
+  }
+}
+function spawnConfetti(){
+  const colors=['#e8c878','#dfe6f2','#ffe9a8','#9c7e3a'];
+  for(let i=0;i<30;i++){
+    const c=document.createElement('div');c.className='confetti';
+    const w=Math.random()*6+4,h=Math.random()*10+6;
+    const dur=(1.5+Math.random()*1.3).toFixed(2), delay=(Math.random()*.35).toFixed(2);
+    c.style.cssText=`left:${Math.random()*100}vw;width:${w}px;height:${h}px;background:${colors[i%colors.length]};`+
+      `animation:confettiFall ${dur}s ease-in ${delay}s forwards`;
+    document.body.appendChild(c);
+    setTimeout(()=>c.remove(),(Number(dur)+Number(delay))*1000+120);
+  }
+}
 
 function rollFaces(dir){
   const T={
@@ -447,21 +550,38 @@ function rollFaces(dir){
     right:{top:'west',west:'bottom',bottom:'east',east:'top',north:'north',south:'south'}}[dir];
   chargedFace=T[chargedFace];
 }
+function passable(x,y){return x>=0&&y>=0&&x<cols&&y<rows&&grid[y][x]!=='#';}
+
 function tryRoll(dx,dy){
   if(busy)return;
   const nx=cube.x+dx,ny=cube.y+dy;
-  if(nx<0||ny<0||nx>=cols||ny>=rows){flash("the edge of the grid");return;}
-  if(grid[ny][nx]==='#'){flash("a wall — can't roll there");return;}
+  if(nx<0||ny<0||nx>=cols||ny>=rows){flash("the edge of the grid");buzz(15);return;}
+  if(grid[ny][nx]==='#'){flash("a wall — can't roll there");buzz(15);return;}
   busy=true;
   const dir=dy<0?'up':dy>0?'down':dx<0?'left':'right';
+  // ice tiles keep the cube sliding in the same direction until something stops it
+  const path=[{x:nx,y:ny}];
+  let cx=nx,cy=ny;
+  while(grid[cy][cx]==='~'){
+    const ax=cx+dx,ay=cy+dy;
+    if(!passable(ax,ay))break;
+    cx=ax;cy=ay;path.push({x:cx,y:cy});
+  }
+  stepChain(path,0,dir);
+}
+function stepChain(path,i,dir){
   const axis=(dir==='up'||dir==='down')?'X':'Y';
   const deg=axis==='X'?(dir==='down'?90:-90):(dir==='right'?-90:90);
   rollTransform=`rotate${axis}(${deg}deg)`;renderCube();
   setTimeout(()=>{
-    cube.x=nx;cube.y=ny;rollFaces(dir);rollTransform='';
-    moves++;moveNum.textContent=moves;paintCurrent();renderState();
-    busy=false;checkWin();
-  },170);
+    cube.x=path[i].x;cube.y=path[i].y;rollFaces(dir);rollTransform='';
+    moves++;moveNum.textContent=moves;
+    paintCurrent();renderState();bumpCube();buzz(10);
+    const k=cube.x+','+cube.y;
+    if(charge.has(k)&&chargedFace==='bottom')spawnSparkle();
+    if(i+1<path.length){stepChain(path,i+1,dir);}
+    else{busy=false;checkWin();}
+  },i===0?170:120);
 }
 function flash(t){msg.textContent=t;clearTimeout(flash._t);
   flash._t=setTimeout(()=>{msg.textContent=LEVELS[li].blurb;},1400);}
@@ -475,6 +595,7 @@ function checkWin(){
     busy=true;const L=LEVELS[li];
     cleared[li]=true;
     if(bestRolls[li]==null||moves<bestRolls[li])bestRolls[li]=moves;
+    buzz([20,40,20,40,60]);spawnConfetti();
     setTimeout(()=>{
       document.getElementById('game').classList.add('hide');
       if(li>=LEVELS.length-1 && cleared.every(Boolean)){

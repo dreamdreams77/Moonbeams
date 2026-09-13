@@ -1,13 +1,19 @@
-const CACHE = 'moonbeams-v1';
+const CACHE = 'moonbeams-v2';
 const ASSETS = [
   './index.html',
   './manifest.json',
-  './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icon-192.png',
+  './icon-512.png',
+  './icon-192-maskable.png',
+  './icon-512-maskable.png'
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+  // Cache each asset independently so one missing/renamed file can't
+  // sink the whole install (which would silently disable offline mode).
+  e.waitUntil(caches.open(CACHE).then(c =>
+    Promise.all(ASSETS.map(url => c.add(url).catch(() => {})))
+  ));
   self.skipWaiting();
 });
 
@@ -19,7 +25,10 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request))
+    caches.match(e.request).then(r => r || fetch(e.request).catch(() => {
+      if (e.request.mode === 'navigate') return caches.match('./index.html');
+    }))
   );
 });
